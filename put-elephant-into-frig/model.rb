@@ -1,35 +1,25 @@
 class Model
   @@stack = Array.new
+  @@pos = 0
 
-  def initialize(name = "", pos = 0)
-    @name, @pos = name, pos
+  def initialize(name = "")
+    @name, @pos = name, @@pos
+    #@@pos += 1
     @m_stm = Stm.new
-    @switch = true
     @link = Hash.new
+    @linkBack = Hash.new
+    @linkInPlace = Hash.new
   end
 
-  def _switch
-    @switch = !@switch
-  end
-  
-  def indent 
-    str = ' '*@pos*8
-    i = @@stack.size
-    while i>0
-      if  @@stack[i-1][0]==@name
-        if str.index '*'
-	  str += "  "
-	else
-          str += "*"
-	end
-	i -= 1
-      else
-        break
-      end
-    end
+  def indent
+    str = ' '*@@pos*4
+    @@pos += 1
     str
   end
-  
+  def indentBack
+    @@pos -= 1
+  end
+   
   def top; @@stack.length<1 ? "" : @@stack.last; end
   
   def isRecursive name
@@ -41,54 +31,105 @@ class Model
     false
   end
   
+  def runAspect calling
+    if calling==nil then return; end
+    calling.each do |x| # insert aspect
+      if x.size<3
+        x[0].instance_eval(x[1])
+      else
+        send(x[2]) {
+	  x[0].instance_eval(x[1])
+	}
+      end
+    end
+  end
+  
+  def runCall name, *args
+    @@stack.push([@name.to_s, name.to_s])
+    runStm name
+    if "#{name}"=="otherwise" || "#{name}".index("?")
+      yield
+    elsif methods.grep(/_#{name}/).size>0 
+      send "_#{name}", *args
+    end
+    @@stack.pop
+  end
+  
   def method_missing(name, *args)
     if name[0]=='_'
       return
     end
-    print "#{indent}#{@name}.#{name}: #{args.join(' ')}"
-    if isRecursive(name.to_s)
-      puts ""
-      return
+    alter = (@linkInPlace[name.to_s]||[]).reverse
+    org = Proc.new do
+      str = indent
+      puts "#{str}#{@name}.#{name}: #{args.join(' ')}"
+      if name.to_s=="otherwise" || !isRecursive(name.to_s)
+        runAspect @link[name.to_s]
+        runCall(name,*args) { if block_given?; then yield; end }
+        runAspect (@linkBack[name.to_s]||[]).reverse
+      end
+      indentBack
     end
-    @@stack.push([@name.to_s, name.to_s])
-    runStm name
-    calling = @link[name.to_s]
-    if calling
-    calling.each do |x| # insert aspect
-      x[0].instance_eval(x[1])
-    end
-    end
-    err = 0
-    if "#{name}"=="otherwise"
-      err = true
-      if @switch
-        yield
-      end    
-    elsif methods.grep(/_#{name}/).size>0 
-      err = send "_#{name}", *args
-    elsif "#{name}".index("?")!=nil
-      err = true
-    end
-    @@stack.pop
-    err
+    p = Proc.new { |x| x[0].instance_eval(x[1]); }
+    q = Proc.new { |i|
+      if i<alter.size
+        if alter[i].size<3
+	  p.call(alter[i])
+        else
+          send(alter[i][2]) {
+	    p.call(alter[i])
+	  }
+	  send("otherwise") {
+	    q.call(i+1) 
+	  }
+        end
+      else
+        org.call 
+      end
+    }
+    # replacing call
+    q.call(0) 
+    #puts "#{str}\} // #{@name}.#{name}"
+    #indentBack
+    true
   end
 
   def runStm name
-    if !@m_stm.empty?
+    if @m_stm.empty? then return end
       error = @m_stm.accept(name.to_s)
       if error && error[0]=='*'
         puts error+" when #{@name}'s  = #{@m_stm.get_current}"
       else
         puts 'STATUS("'+error+"\")"
       end
+  end
+
+  def link(method, obj, calling, cond=nil)
+    @link[method.to_s] ||= []
+    if cond==nil
+      @link[method.to_s].push [obj, calling]
     else
-      puts ""
+      @link[method.to_s].push [obj, calling, cond]
     end
   end
 
-  def link(method, obj, calling)
-    @link[method.to_s] ||= []
-    @link[method.to_s].push [obj, calling]
+  def linkBack(method, obj, calling, cond=nil)
+    @linkBack[method.to_s] ||= []
+    if cond==nil
+      @linkBack[method.to_s].push [obj, calling]
+    else
+      @linkBack[method.to_s].push [obj, calling]
+    end
+  end
+
+  def linkInPlace(method, obj, calling, cond=nil)
+    @linkInPlace[method.to_s] ||= []
+    if cond==nil
+      @linkInPlace[method.to_s].clear
+      @linkInPlace[method.to_s].push [obj, calling]
+    else
+      @linkInPlace[method.to_s].push [obj, calling, cond]
+    end
   end
 
   def name; @name; end
