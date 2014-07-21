@@ -1,4 +1,4 @@
-
+# -*- coding: gbk -*-
 tokens = (  
         'NAME', 'STRING',  'NUMBER',
         'IF', 'WHILE', 'FOR', 'ELSE', 'DOC', 'METHOD',
@@ -8,16 +8,17 @@ tokens = (
 reserved = {
     'if':'IF', 'while':'WHILE', 'for':'FOR',
     'else':'ELSE', 'doc':'DOC', 'method':'METHOD',
-    'object':'OBJECT', 'attr':'ATTR', 'in':'IN', 'out':'OUT'
+    'class':'OBJECT', 'attr':'ATTR', 'in':'IN', 'out':'OUT',
+    'aspect':'OBJECT'
 }
 literals = ',=(){}.'
 
 def t_STRING(t):
     r'\"[^\"]*\"'
-    t.value = t.value[1:len(t.value)-2]
+    t.value = t.value[1:len(t.value)-1]
     return t
 def t_NAME(t):
-    r'[A-Za-z_]+[A-Za-z_]*'
+    r'[^ \t\r\n\.#,=\(\)\{\}]+'
     if t.value in reserved:
         t.type = reserved[t.value]
     return t
@@ -26,7 +27,7 @@ def t_NUMBER(t):
     return t
 
 # Ignored characters
-t_ignore = " \t"
+t_ignore = " \t\r"
 t_ignore_COMMENT = r'\#[^\n]*'
 def t_newline(t):
     r'\n+'
@@ -39,7 +40,7 @@ def t_error(t):
 # Build the lexer
 import ply.lex as lex
 
-data = """   # first comment\nobject first {doc mission=\"\nexample\"
+data = u"""   # first comment\nobject 第一 {doc mission=\"\nexample\"
 \n attr haha \n method miss(in g, out p, q){ g.daddy()\n
 if _not_() {} else { while is() { for a in b {}}}
 }}
@@ -49,6 +50,14 @@ lexer = lex.lex()
 ##for token in lexer:
 ##    print(token)
 
+def p_object_list(p):
+    ''' object_list : 
+    | object_list object '''
+    if len(p)==1:
+        p[0] = []
+    else:
+        p[0] = p[1]
+        p[0].append(p[2])
 def p_object(p):
     ' object : OBJECT NAME "{" decl_list "}"'
     p[0] = (p[1], p[2], p[4])
@@ -100,13 +109,14 @@ def p_for_stmt(p):
     ' for_stmt : FOR NAME IN NAME "{" stmt_list "}" '
     p[0] = ('FOR', p[2], p[4], p[6])
 def p_doc_stmt(p):
-    ' doc_stmt : DOC NAME "=" STRING '
+    ''' doc_stmt : DOC NAME "=" STRING
+    | DOC NAME "=" NAME '''
     p[0] = ('DOC', p[2], p[4])
 def p_attr_stmt(p):
-    ' attr_stmt : ATTR name_list'
+    ' attr_stmt : ATTR '
     p[0] = ('ATTR', p[2])
 def p_call(p):
-    ' call : ref_name "(" opt_name_list ")" '
+    ' call : ref_name "(" opt_value_list ")" '
     p[0] = ('call', p[1], p[3])
 def p_ref_name(p):
     ''' ref_name : NAME
@@ -117,20 +127,30 @@ def p_ref_name(p):
         p[1].append(p[3])
         p[0] = p[1]
 
-def p_opt_name_list(p):
-    ''' opt_name_list :
-    | name_list '''
+def p_opt_value_list(p):
+    ''' opt_value_list :
+    | value_list '''
     if len(p)==1:
         p[0]= []
     else:
         p[0] = p[1]
-def p_name_list(p):
-    ''' name_list : NAME
-    | name_list "," NAME '''
+def p_value_list(p):
+    ''' value_list : value
+    | value_list "," value '''
     if len(p)==2:
         p[0] = [p[1]]
     else:
         p[1].append(p[3])
+        p[0] = p[1]
+def p_value(p):
+    ''' value : ref_name
+    | NUMBER
+    | STRING '''
+    p[0] = p[1]
+def p_opt_arg_list(p):
+    ''' opt_arg_list :
+    | arg_list '''
+    if len(p)>1:
         p[0] = p[1]
 def p_arg_list(p):
     ''' arg_list : arg
@@ -150,15 +170,18 @@ def p_arg(p):
     else:
         p[0] = (p[1], p[2])
 def p_method_stmt(p):
-    ' method_stmt : METHOD NAME "(" arg_list ")" "{" stmt_list "}" '
+    ' method_stmt : METHOD NAME "(" opt_arg_list ")" "{" stmt_list "}" '
     p[0] = (p[1], p[2], p[4], p[7])
 def p_error(p):  
     if p:  
-        print("Syntax error at '%s'" % p.value)
+        print("Syntax error at '%s'" % p.value, p)
     else:  
         print("Syntax error at EOF")  
 import ply.yacc as yacc  
 yacc.yacc()
+fw = open("Z:/qa/adc/assert.txt", 'r', -1, 'utf-8')
+data = fw.read()
+print(data)
 a = yacc.parse(data)
 print(a)
 
