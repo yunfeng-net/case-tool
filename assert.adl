@@ -1,0 +1,41 @@
+class Main_frame
+{
+  method main()
+  {
+    parser.parse()
+    while(dataModel.configure())
+    {
+      output.init(dataModel)
+      simFlow.init(dataModel, output)      
+    }
+  }
+}
+
+aspect Assert
+{
+  method extend(main_frame)
+  {
+    extend(main_frame.parser.parse, in_turn)
+    extend(main_frame.output.init, in_turn)
+    insert(main_frame.output, in_turn)
+  }
+}
+
+class document
+{
+  method main()
+  {
+    assert.extend(main_frame)
+    h1(支持assert)
+    p("Yunfeng, 2012-04-08")
+    h2(介绍)
+    p("You can set custom characterization checks to determine the safe operating area of your circuit using the assert statement. You can add these checks to a netlist or model card for transient, DC, and DC sweep analyses. The Spectre circuit simulator noties you when parameters of instances, models, or expressions fall outside the bounds specied in your check.")
+    h2(需求)
+    usecase(main_frame, assert, print_table)
+    h2(方案)
+    composition(main_frame, assert)
+    sequence(main_frame, assert)
+    h2(风险管理)    
+    table(main_frame, assert, risk)
+  }
+}
